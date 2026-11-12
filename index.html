@@ -159,7 +159,7 @@ if (!DEMO) {
   let mem = load() || { started:false, budget:'100 zł', event:'Prezenty zostawiamy pod choinką w Wigilię (24 grudnia)', people:[] };
   const chk = p => { if (p !== 'demo') throw new Error('ZLE_HASLO'); };
   api = {
-    info: async () => ({ started: mem.started, budget: mem.budget, event: mem.event,
+    info: async () => ({ started: mem.started, draw: mem.draw, budget: mem.budget, event: mem.event,
                          people: mem.people.map(p => ({ name:p.name, claimed:!!p.pin })).sort((a,b)=>a.name.localeCompare(b.name,'pl')) }),
     reveal: async (name, pin) => {
       if (!/^\d{4}$/.test(pin)) return { ok:false, error:'PIN_4_CYFRY' };
@@ -188,7 +188,7 @@ if (!DEMO) {
       }
       const pool = Array.from({ length: Math.max(99, n*3) - 9 }, (_, k) => k + 10);
       for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
-      mem = { started:true, budget, event, people: order.map((x,i) => ({ name:x, partner:partner[x]||null, recipient:order[(i+1)%n], code:pool[i], pin:null, fails:0 })) };
+      mem = { started:true, draw:String(Date.now()), budget, event, people: order.map((x,i) => ({ name:x, partner:partner[x]||null, recipient:order[(i+1)%n], code:pool[i], pin:null, fails:0 })) };
       save(mem);
     },
     status: async pass => { chk(pass); return mem.people.map(p => ({ name:p.name, partner:p.partner, claimed:!!p.pin, locked:p.fails>=5 }))
@@ -226,9 +226,15 @@ async function home() {
       <p class="center">Organizator nie rozpoczął jeszcze losowania. Zajrzyj tu później! ⛄</p>${infoBox}</div>`;
     return;
   }
-  $app.innerHTML = `
+  const mine = myName();
+  $app.innerHTML = mine ? `
+    <div class="card"><h2>Witaj ponownie!</h2>
+      <p class="hint">Na tym urządzeniu wynik sprawdził(a) już <b>${esc(mine)}</b>. Inne imiona są zablokowane.</p>
+      <div class="names" style="grid-template-columns:1fr"><button class="name-btn claimed" data-n="${esc(mine)}">${esc(mine)}: pokaż mój wynik 🎁</button></div>
+    </div>
+    <div class="card">${infoBox}</div>` : `
     <div class="card"><h2>Kim jesteś?</h2>
-      <p class="hint">Wybierz swoje imię. ✓ oznacza, że ta osoba już sprawdziła wynik.</p>
+      <p class="hint">Wybierz <b>swoje</b> imię. Po sprawdzeniu wyniku to urządzenie zostanie przypisane do Ciebie i nie wybierzesz już innego. ✓ oznacza, że ta osoba już sprawdziła wynik.</p>
       <div class="names">${INFO.people.map(p =>
         `<button class="name-btn ${p.claimed?'claimed':''}" data-n="${esc(p.name)}">${esc(p.name)}</button>`).join('')}</div>
     </div>
@@ -237,6 +243,15 @@ async function home() {
     const p = INFO.people.find(x => x.name === b.dataset.n); pinView(p.name, p.claimed);
   });
 }
+
+// Blokada urządzenia: po sprawdzeniu wyniku telefon pamięta imię (osobno dla każdego losowania)
+const LOCK_KEY = 'losowanie_moje_imie';
+function myName() {
+  let l = null; try { l = JSON.parse(localStorage.getItem(LOCK_KEY)); } catch {}
+  if (!l || !INFO || l.draw !== INFO.draw || !INFO.people.some(p => p.name === l.name)) return null;
+  return l.name;
+}
+function lockTo(name) { try { localStorage.setItem(LOCK_KEY, JSON.stringify({ draw: INFO.draw, name })); } catch {} }
 
 function pinBoxes(id) {
   return `<div class="pin" id="${id}">${[0,1,2,3].map(()=>`<input inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off">`).join('')}</div>`;
@@ -256,6 +271,8 @@ function wirePin(id, onFull) {
 }
 
 function pinView(name, claimed) {
+  const mine = myName();
+  if (mine && mine !== name) return home();
   $app.innerHTML = `<div class="card">
     <div class="who">Cześć, <b>${esc(name)}</b>! 👋</div>
     ${claimed
@@ -277,7 +294,7 @@ function pinView(name, claimed) {
     $go.disabled = true; $err.textContent = '';
     try {
       const r = await api.reveal(name, pin);
-      if (r.ok) return revealView(name, r.recipient, r.first, r.code);
+      if (r.ok) { lockTo(name); return revealView(name, r.recipient, r.first, r.code); }
       if (r.error === 'ZLY_PIN') $err.textContent = `Zły PIN. Pozostało prób: ${r.left}.`;
       else $err.textContent = ERR[r.error] || r.error;
       p1.clear();

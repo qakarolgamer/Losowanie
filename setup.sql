@@ -155,6 +155,7 @@ returns jsonb language sql security definer
 set search_path = public, extensions as $$
   select jsonb_build_object(
     'started',  s.started_at is not null,
+    'draw',     extract(epoch from s.started_at)::text,   -- identyfikator losowania (blokada urządzenia)
     'budget',   s.budget,
     'event',    s.event_info,
     'people',   coalesce((select jsonb_agg(jsonb_build_object(
