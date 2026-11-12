@@ -85,6 +85,9 @@
   .result{font-family:'Lobster',cursive;font-size:52px;color:var(--red);margin:4px 0 6px;animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
   @keyframes pop{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
   .secret{background:#fff3d6;border-radius:12px;padding:10px 12px;font-size:14px;margin-top:12px;text-align:center}
+  .code{background:#fff;border:2px dashed var(--green);border-radius:14px;padding:10px 12px;margin-top:4px}
+  .code b{display:block;font-size:38px;color:var(--green);letter-spacing:2px;margin:2px 0}
+  .code small{display:block;font-size:13px;opacity:.8}
   .confetti{position:fixed;top:-10px;width:9px;height:14px;z-index:5;pointer-events:none;animation:fall linear forwards}
   @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
 
@@ -153,8 +156,9 @@ if (!DEMO) {
       if (!/^\d{4}$/.test(pin)) return { ok:false, error:'PIN_4_CYFRY' };
       const p = mem.people.find(x => x.name === name); if (!p) return { ok:false, error:'BRAK_OSOBY' };
       if (p.fails >= 5) return { ok:false, error:'ZABLOKOWANE' };
-      if (!p.pin) { p.pin = pin; save(mem); return { ok:true, recipient:p.recipient, first:true }; }
-      if (p.pin === pin) { p.fails = 0; save(mem); return { ok:true, recipient:p.recipient, first:false }; }
+      const code = (mem.people.find(x => x.name === p.recipient) || {}).code;
+      if (!p.pin) { p.pin = pin; save(mem); return { ok:true, recipient:p.recipient, code, first:true }; }
+      if (p.pin === pin) { p.fails = 0; save(mem); return { ok:true, recipient:p.recipient, code, first:false }; }
       p.fails++; save(mem); return { ok:false, error:'ZLY_PIN', left: 5 - p.fails };
     },
     start: async (pass, people, budget, event) => {
@@ -173,7 +177,9 @@ if (!DEMO) {
         for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
         if (order.every((x,i) => partner[x] !== order[(i+1)%n])) break;
       }
-      mem = { started:true, budget, event, people: order.map((x,i) => ({ name:x, partner:partner[x]||null, recipient:order[(i+1)%n], pin:null, fails:0 })) };
+      const pool = Array.from({ length: Math.max(99, n*3) - 9 }, (_, k) => k + 10);
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+      mem = { started:true, budget, event, people: order.map((x,i) => ({ name:x, partner:partner[x]||null, recipient:order[(i+1)%n], code:pool[i], pin:null, fails:0 })) };
       save(mem);
     },
     status: async pass => { chk(pass); return mem.people.map(p => ({ name:p.name, partner:p.partner, claimed:!!p.pin, locked:p.fails>=5 }))
@@ -262,7 +268,7 @@ function pinView(name, claimed) {
     $go.disabled = true; $err.textContent = '';
     try {
       const r = await api.reveal(name, pin);
-      if (r.ok) return revealView(name, r.recipient, r.first);
+      if (r.ok) return revealView(name, r.recipient, r.first, r.code);
       if (r.error === 'ZLY_PIN') $err.textContent = `Zły PIN. Pozostało prób: ${r.left}.`;
       else $err.textContent = ERR[r.error] || r.error;
       p1.clear();
@@ -272,14 +278,16 @@ function pinView(name, claimed) {
   $go.onclick = go;
 }
 
-function revealView(name, recipient, first) {
+function revealView(name, recipient, first, code) {
   $app.innerHTML = `<div class="card center">
     <div class="who"><b>${esc(name)}</b>, kupujesz prezent dla…</div>
     <div class="gift shake" id="gift">🎁</div>
     <div class="roll" id="roll">&nbsp;</div>
     <p class="hint" id="tap">Dotknij prezentu, żeby go otworzyć!</p>
     <div id="after" class="hidden">
-      <div class="secret">🤫 <b>Ćśś!</b> To tajemnica, nikomu nie mów.<br>Limit: <b>${esc(INFO.budget)}</b> · ${esc(INFO.event)}</div>
+      ${code != null ? `<div class="code"><small>Numer kontrolny</small><b>${esc(code)}</b>
+        <small>Zapamiętaj go. Po losowaniu każdy poda swój numer: jeśli wszystkie są różne, nikt się nie powtórzył. Numer nie zdradza, kogo wylosowałeś/aś.</small></div>` : ''}
+      <div class="secret">🤫 <b>Ćśś!</b> Imię to tajemnica, nikomu nie mów.<br>Limit: <b>${esc(INFO.budget)}</b> · ${esc(INFO.event)}</div>
       <p class="hint" style="margin-top:12px">${first ? 'Zapamiętaj swój PIN. Z nim możesz tu wrócić i sprawdzić wynik jeszcze raz.' : ''}</p>
       <button class="btn gold" id="done">Gotowe ✨</button>
     </div></div>`;

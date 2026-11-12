@@ -29,7 +29,8 @@ create table public.participants (
   recipient       text,                 -- komu kupuje prezent
   pin_hash        text,                 -- PIN ustawiony przy pierwszym wejściu
   failed_attempts int  not null default 0,
-  claimed_at      timestamptz
+  claimed_at      timestamptz,
+  code            int                   -- tajny numer kontrolny tej osoby (widzi go tylko ten, kto ją wylosował)
 );
 
 -- Nikt z zewnątrz nie czyta tabel bezpośrednio. Tylko przez funkcje poniżej.
@@ -65,7 +66,8 @@ declare
   v_names    text[];
   v_partner  jsonb := '{}'::jsonb;
   v_order    text[];
-  v_ok       boolean;
+  v_codes    int[];
+  v_ok      boolean;
   v_n        int;
   v_try      int := 0;
   p          jsonb;
@@ -111,9 +113,13 @@ begin
   end loop;
 
   -- "where true" / "where id = 1": Supabase (pg_safeupdate) odrzuca DELETE/UPDATE bez WHERE
+  -- unikalne losowe numery kontrolne (dwucyfrowe, przy dużej grupie większe)
+  select array_agg(c) into v_codes from (
+    select c from generate_series(10, greatest(99, v_n * 3)) c order by random() limit v_n) s;
+
   delete from participants where true;
-  insert into participants(name, partner, recipient)
-  select v_order[g.k], v_partner->>v_order[g.k], v_order[(g.k % v_n) + 1]
+  insert into participants(name, partner, recipient, code)
+  select v_order[g.k], v_partner->>v_order[g.k], v_order[(g.k % v_n) + 1], v_codes[g.k]
   from generate_series(1, v_n) as g(k);
 
   update settings set budget = p_budget, event_info = p_event, started_at = now() where id = 1;
@@ -163,7 +169,7 @@ create or replace function public.reveal(p_name text, p_pin text)
 -- Zwraca {"ok":true,"recipient":"..."} albo {"ok":false,"error":"...","left":N}
 returns jsonb language plpgsql security definer
 set search_path = public, extensions as $$
-declare r participants;
+declare r participants; v_code int;
 begin
   if coalesce(p_pin, '') !~ '^\d{4}$' then
     return jsonb_build_object('ok', false, 'error', 'PIN_4_CYFRY');
@@ -173,15 +179,17 @@ begin
   if not found then return jsonb_build_object('ok', false, 'error', 'BRAK_OSOBY'); end if;
   if r.failed_attempts >= 5 then return jsonb_build_object('ok', false, 'error', 'ZABLOKOWANE'); end if;
 
+  select code into v_code from participants where name = r.recipient;
+
   if r.pin_hash is null then
     update participants set pin_hash = crypt(p_pin, gen_salt('bf')), claimed_at = now()
     where name = p_name;
-    return jsonb_build_object('ok', true, 'recipient', r.recipient, 'first', true);
+    return jsonb_build_object('ok', true, 'recipient', r.recipient, 'code', v_code, 'first', true);
   end if;
 
   if r.pin_hash = crypt(p_pin, r.pin_hash) then
     update participants set failed_attempts = 0 where name = p_name;
-    return jsonb_build_object('ok', true, 'recipient', r.recipient, 'first', false);
+    return jsonb_build_object('ok', true, 'recipient', r.recipient, 'code', v_code, 'first', false);
   end if;
 
   -- błędny PIN: zapisujemy próbę (bez raise, żeby licznik się nie cofnął)

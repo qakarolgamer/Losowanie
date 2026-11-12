@@ -71,6 +71,11 @@ W panelu widać tylko, **kto już sprawdził** swój wynik. Samych wyników orga
 3. Klika prezent 🎁 i widzi, komu kupuje upominek.
 4. Może wrócić w dowolnym momencie, kliknąć swoje imię, podać PIN i zobaczyć wynik jeszcze raz.
 
+### Numer kontrolny (sprawdzenie, czy nikt się nie powtórzył)
+Przy losowaniu każdy uczestnik dostaje tajny, losowy numer (np. 47). Nie widzi go ani on sam, ani organizator. Widzi go tylko osoba, która go wylosowała, obok jego imienia.
+
+Po losowaniu każdy podaje numer ze swojego wyniku, np. na grupie. Jeśli numerów jest tyle, ilu uczestników, i żaden się nie powtarza, to każdy kupuje prezent innej osobie. Numer nie zdradza, kto kogo wylosował.
+
 ---
 
 ## Najczęstsze sytuacje
