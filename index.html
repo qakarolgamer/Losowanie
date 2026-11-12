@@ -82,6 +82,15 @@
   .gift.shake{animation:shake .5s infinite}
   @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg) scale(1.05)}75%{transform:rotate(12deg) scale(1.05)}}
   .roll{font-family:'Lobster',cursive;font-size:44px;color:var(--red);min-height:60px;margin:6px 0}
+  .roll.emoji{font-size:48px;line-height:60px}
+  .roll.bump{animation:bump .25s ease-out}
+  @keyframes bump{0%{transform:scale(.4) rotate(-15deg);opacity:.3}100%{transform:scale(1) rotate(0);opacity:1}}
+  .gift.opening{animation:opening .35s infinite, grow 2.6s ease-in forwards}
+  @keyframes opening{0%,100%{rotate:0deg}25%{rotate:-14deg}75%{rotate:14deg}}
+  @keyframes grow{0%{scale:1;filter:drop-shadow(0 0 0 #f4c95d)}100%{scale:1.35;filter:drop-shadow(0 0 22px #f4c95d)}}
+  .spark{position:fixed;z-index:6;pointer-events:none;transform:translate(-50%,-50%);animation:spark 1s ease-out forwards}
+  @keyframes spark{0%{opacity:1;transform:translate(-50%,-50%) scale(.4)}
+    100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.2) rotate(180deg)}}
   .result{font-family:'Lobster',cursive;font-size:52px;color:var(--red);margin:4px 0 6px;animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
   @keyframes pop{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
   .secret{background:#fff3d6;border-radius:12px;padding:10px 12px;font-size:14px;margin-top:12px;text-align:center}
@@ -296,18 +305,36 @@ function revealView(name, recipient, first, code) {
   gift.onclick = () => {
     if (opened) return; opened = true;
     document.getElementById('tap').classList.add('hidden');
-    const pool = INFO.people.map(p => p.name).filter(n => n !== name);
-    let t = 0, delay = 60;
+    // świąteczna animacja zamiast przewijania imion
+    const icons = ['🎄','⭐','🎅','❄️','🔔','🦌','🍪','☃️','🕯️','🧦'];
+    gift.classList.remove('shake'); gift.classList.add('opening');
+    roll.className = 'roll emoji';
+    let t = 0, delay = 90;
+    const sparks = setInterval(() => sparkle(gift), 140);
     (function spin() {
-      roll.textContent = pool[Math.floor(Math.random()*pool.length)];
-      t++; delay *= 1.1;
-      if (t < 18) return setTimeout(spin, delay);
-      gift.classList.remove('shake'); gift.textContent = '🎉';
+      roll.textContent = icons[t % icons.length];
+      roll.classList.remove('bump'); void roll.offsetWidth; roll.classList.add('bump');
+      t++; delay *= 1.08;
+      if (t < 16) return setTimeout(spin, delay);
+      clearInterval(sparks);
+      gift.classList.remove('opening'); gift.textContent = '🎉';
+      for (let i = 0; i < 18; i++) sparkle(gift, true);
       roll.className = 'result'; roll.textContent = recipient;
       confetti(); document.getElementById('after').classList.remove('hidden');
     })();
   };
   document.getElementById('done').onclick = home;
+}
+
+// iskierki ✨❄️⭐ wylatujące z prezentu
+function sparkle(el, big) {
+  const r = el.getBoundingClientRect(), s = document.createElement('div');
+  s.className = 'spark'; s.textContent = ['✨','❄️','⭐','🌟'][Math.floor(Math.random()*4)];
+  const a = Math.random() * Math.PI * 2, d = (big ? 120 : 70) + Math.random() * 60;
+  s.style.left = (r.left + r.width/2) + 'px'; s.style.top = (r.top + r.height/2) + 'px';
+  s.style.setProperty('--dx', Math.cos(a)*d + 'px'); s.style.setProperty('--dy', Math.sin(a)*d + 'px');
+  s.style.fontSize = (big ? 26 : 18) + Math.random()*10 + 'px';
+  document.body.appendChild(s); setTimeout(() => s.remove(), 1000);
 }
 
 function confetti() {
