@@ -110,12 +110,13 @@ begin
     exit when v_ok;
   end loop;
 
-  delete from participants;
+  -- "where true" / "where id = 1": Supabase (pg_safeupdate) odrzuca DELETE/UPDATE bez WHERE
+  delete from participants where true;
   insert into participants(name, partner, recipient)
   select v_order[g.k], v_partner->>v_order[g.k], v_order[(g.k % v_n) + 1]
   from generate_series(1, v_n) as g(k);
 
-  update settings set budget = p_budget, event_info = p_event, started_at = now();
+  update settings set budget = p_budget, event_info = p_event, started_at = now() where id = 1;
 end $$;
 
 -- ORGANIZATOR: kto już sprawdził wynik (bez ujawniania wyników)
