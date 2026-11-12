@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎄 Świąteczne Losowanie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lobster&family=Nunito:wght@400;700;800&display=swap&subset=latin-ext" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // ============================================================
+  //  KONFIGURACJA – wklej dane z Supabase (Project Settings → API)
+  //  Dopóki są puste, strona działa w TRYBIE DEMO (dane tylko w przeglądarce).
+  // ============================================================
+  const SUPABASE_URL      = "";   // np. "https://abcdxyz.supabase.co"
+  const SUPABASE_ANON_KEY = "";   // klucz "anon public"
+</script>
+<style>
+  :root{
+    --red:#b3122e; --red-dark:#7a0b1f; --green:#0f5132; --green-dark:#08331f;
+    --gold:#f4c95d; --gold-dark:#c99a2e; --cream:#fff8ec; --ink:#2b1b12;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{background:#041a10}
+  html,body{margin:0;min-height:100%}
+  body{
+    font-family:'Nunito',system-ui,sans-serif;color:var(--cream);
+    background:radial-gradient(ellipse at top,#16603d 0%,var(--green-dark) 600px,#041a10 100%);
+    min-height:100vh;overflow-x:hidden;
+  }
+  #snow{position:fixed;inset:0;pointer-events:none;z-index:0}
+  .wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:28px 18px 60px}
+  header{text-align:center;margin-bottom:18px}
+  header .tree{font-size:46px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
+  h1{font-family:'Lobster',cursive;font-weight:400;font-size:42px;margin:4px 0 2px;color:var(--gold);
+     text-shadow:0 3px 0 var(--red-dark),0 6px 18px rgba(0,0,0,.45)}
+  header p{margin:0;opacity:.85}
+  .lights{display:flex;justify-content:center;gap:14px;margin:14px 0 4px}
+  .lights span{width:12px;height:12px;border-radius:50%;animation:blink 1.6s infinite}
+  .lights span:nth-child(4n+1){background:#ff4d6d;animation-delay:0s}
+  .lights span:nth-child(4n+2){background:var(--gold);animation-delay:.4s}
+  .lights span:nth-child(4n+3){background:#5bd1ff;animation-delay:.8s}
+  .lights span:nth-child(4n+4){background:#7dff8a;animation-delay:1.2s}
+  @keyframes blink{0%,100%{opacity:1;box-shadow:0 0 12px currentColor}50%{opacity:.25;box-shadow:none}}
+
+  .card{background:var(--cream);color:var(--ink);border-radius:22px;padding:22px 20px;
+        box-shadow:0 14px 40px rgba(0,0,0,.35);border:3px solid var(--gold);position:relative;margin-bottom:18px}
+  .card::before{content:"";position:absolute;inset:6px;border:1.5px dashed rgba(179,18,46,.35);border-radius:16px;pointer-events:none}
+  .card h2{font-family:'Lobster',cursive;font-weight:400;color:var(--red);margin:0 0 12px;font-size:28px;text-align:center}
+  .info{display:flex;gap:10px}
+  .info div{flex:1;background:#fff;border-radius:14px;padding:12px;text-align:center;border:1px solid #f0dcc0}
+  .info b{display:block;font-size:22px;color:var(--red)}
+  .info small{font-size:13px;opacity:.75}
+
+  .names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .name-btn{font:inherit;font-weight:800;font-size:17px;padding:14px 10px;border-radius:14px;border:2px solid var(--green);
+            background:#fff;color:var(--green);cursor:pointer;transition:.15s;position:relative}
+  .name-btn:active{transform:scale(.97)}
+  .name-btn.claimed{border-color:#d9c8a8;color:#8a7a62;background:#faf3e6}
+  .name-btn.claimed::after{content:"✓";position:absolute;top:4px;right:8px;font-size:13px;color:var(--green)}
+
+  .btn{font:inherit;font-weight:800;font-size:18px;width:100%;padding:15px;border:none;border-radius:14px;cursor:pointer;
+       background:linear-gradient(180deg,#d61c3d,var(--red));color:#fff;box-shadow:0 5px 0 var(--red-dark);transition:.1s}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--red-dark)}
+  .btn:disabled{opacity:.5}
+  .btn.gold{background:linear-gradient(180deg,var(--gold),var(--gold-dark));color:var(--ink);box-shadow:0 5px 0 #8f6b17}
+  .btn.ghost{background:transparent;color:var(--ink);box-shadow:none;font-size:15px;text-decoration:underline;padding:10px}
+  .btn.small{font-size:13px;padding:6px 10px;width:auto;box-shadow:0 3px 0 var(--red-dark)}
+
+  .pin{display:flex;justify-content:center;gap:10px;margin:14px 0 6px}
+  .pin input{width:58px;height:66px;font:inherit;font-size:30px;font-weight:800;text-align:center;border-radius:14px;
+             border:2px solid #e3cfa8;background:#fff;color:var(--ink);-webkit-text-security:disc}
+  .pin input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 4px rgba(179,18,46,.15)}
+  .hint{text-align:center;font-size:14px;opacity:.8;margin:6px 0 14px}
+  .err{color:var(--red);text-align:center;font-weight:700;min-height:22px;margin:4px 0 8px}
+  .center{text-align:center}
+  .who{font-size:15px;text-align:center;margin-bottom:4px}
+  .who b{color:var(--green);font-size:20px}
+
+  /* odsłanianie */
+  .gift{font-size:96px;display:inline-block;margin:10px 0;cursor:pointer;user-select:none}
+  .gift.shake{animation:shake .5s infinite}
+  @keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg) scale(1.05)}75%{transform:rotate(12deg) scale(1.05)}}
+  .roll{font-family:'Lobster',cursive;font-size:44px;color:var(--red);min-height:60px;margin:6px 0}
+  .result{font-family:'Lobster',cursive;font-size:52px;color:var(--red);margin:4px 0 6px;animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pop{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
+  .secret{background:#fff3d6;border-radius:12px;padding:10px 12px;font-size:14px;margin-top:12px;text-align:center}
+  .confetti{position:fixed;top:-10px;width:9px;height:14px;z-index:5;pointer-events:none;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+
+  /* admin */
+  textarea,.field{width:100%;font:inherit;font-size:16px;padding:12px;border-radius:12px;border:2px solid #e3cfa8;background:#fff;color:var(--ink)}
+  textarea{min-height:240px;resize:vertical}
+  label{font-weight:800;font-size:14px;display:block;margin:12px 0 6px}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  td{padding:8px 4px;border-bottom:1px solid #f0dcc0}
+  .badge{font-size:12px;padding:3px 8px;border-radius:20px;font-weight:800}
+  .ok{background:#d6f5df;color:var(--green)} .no{background:#f4e6cf;color:#8a6a2e} .lock{background:#ffd6dc;color:var(--red)}
+  .demo{background:rgba(244,201,93,.15);border:1px dashed var(--gold);color:var(--gold);border-radius:12px;padding:8px 12px;
+        font-size:13px;text-align:center;margin-bottom:14px}
+  footer{text-align:center;font-size:13px;opacity:.6;margin-top:10px}
+  footer a{color:var(--gold)}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<canvas id="snow"></canvas>
+<div class="wrap">
+  <header>
+    <div class="tree">🎄</div>
+    <h1>Świąteczne Losowanie</h1>
+    <p>Kto komu kupuje prezent? 🎁</p>
+    <div class="lights"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  </header>
+
+  <div id="demoBanner" class="demo hidden">🧪 Tryb demo: dane zapisują się tylko w tej przeglądarce. Hasło organizatora: <b>demo</b></div>
+  <main id="app"><div class="card center">Ładowanie… ❄️</div></main>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+// =====================================================================
+//  BACKEND: Supabase albo lokalne demo
+// =====================================================================
+const DEMO = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+let api;
+
+if (!DEMO) {
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const call = async (fn, args) => {
+    const { data, error } = await sb.rpc(fn, args || {});
+    if (error) throw new Error(error.message);
+    return data;
+  };
+  api = {
+    info:   ()                 => call('get_info'),
+    reveal: (name, pin)        => call('reveal', { p_name: name, p_pin: pin }),
+    start:  (pass, people, b, e)=> call('admin_start', { p_pass: pass, p_people: people, p_budget: b, p_event: e }),
+    status: (pass)             => call('admin_status', { p_pass: pass }),
+    reset:  (pass, name)       => call('admin_reset_pin', { p_pass: pass, p_name: name }),
+  };
+} else {
+  // Ta sama logika co w bazie, ale w localStorage (tylko do podglądu)
+  const KEY = 'losowanie_demo';
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch { return null; } };
+  const save = s => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} };
+  let mem = load() || { started:false, budget:'100 zł', event:'Prezenty zostawiamy pod choinką w Wigilię (24 grudnia)', people:[] };
+  const chk = p => { if (p !== 'demo') throw new Error('ZLE_HASLO'); };
+  api = {
+    info: async () => ({ started: mem.started, budget: mem.budget, event: mem.event,
+                         people: mem.people.map(p => ({ name:p.name, claimed:!!p.pin })).sort((a,b)=>a.name.localeCompare(b.name,'pl')) }),
+    reveal: async (name, pin) => {
+      if (!/^\d{4}$/.test(pin)) return { ok:false, error:'PIN_4_CYFRY' };
+      const p = mem.people.find(x => x.name === name); if (!p) return { ok:false, error:'BRAK_OSOBY' };
+      if (p.fails >= 5) return { ok:false, error:'ZABLOKOWANE' };
+      if (!p.pin) { p.pin = pin; save(mem); return { ok:true, recipient:p.recipient, first:true }; }
+      if (p.pin === pin) { p.fails = 0; save(mem); return { ok:true, recipient:p.recipient, first:false }; }
+      p.fails++; save(mem); return { ok:false, error:'ZLY_PIN', left: 5 - p.fails };
+    },
+    start: async (pass, people, budget, event) => {
+      chk(pass);
+      const names = people.map(p => p.name), n = names.length;
+      if (n < 3) throw new Error('ZA_MALO_OSOB');
+      if (new Set(names.map(x=>x.toLowerCase())).size !== n) throw new Error('POWTORZONE_IMIE');
+      const partner = {};
+      people.forEach(p => { if (p.partner) {
+        if (!names.includes(p.partner)) throw new Error('NIEZNANY_PARTNER: ' + p.partner);
+        partner[p.name] = p.partner; partner[p.partner] = p.name; } });
+      let order;
+      for (let t = 0; ; t++) {
+        if (t > 20000) throw new Error('NIE_DA_SIE_WYLOSOWAC');
+        order = [...names];
+        for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+        if (order.every((x,i) => partner[x] !== order[(i+1)%n])) break;
+      }
+      mem = { started:true, budget, event, people: order.map((x,i) => ({ name:x, partner:partner[x]||null, recipient:order[(i+1)%n], pin:null, fails:0 })) };
+      save(mem);
+    },
+    status: async pass => { chk(pass); return mem.people.map(p => ({ name:p.name, partner:p.partner, claimed:!!p.pin, locked:p.fails>=5 }))
+                                                       .sort((a,b)=>a.name.localeCompare(b.name,'pl')); },
+    reset: async (pass, name) => { chk(pass); const p = mem.people.find(x=>x.name===name); if (p) { p.pin=null; p.fails=0; save(mem); } },
+  };
+}
+
+const ERR = {
+  ZLE_HASLO:'Złe hasło organizatora.', ZA_MALO_OSOB:'Potrzeba co najmniej 3 osób.',
+  POWTORZONE_IMIE:'Któreś imię się powtarza – dodaj np. inicjał nazwiska.',
+  NIE_DA_SIE_WYLOSOWAC:'Przy tych regułach nie da się ułożyć losowania.',
+  PIN_4_CYFRY:'PIN musi mieć 4 cyfry.', BRAK_OSOBY:'Nie ma takiej osoby.',
+  ZABLOKOWANE:'Za dużo błędnych prób. Poproś organizatora o reset PIN-u.',
+};
+const msg = e => { const m = (e && e.message) || String(e);
+  for (const k in ERR) if (m.includes(k)) return ERR[k];
+  if (m.includes('NIEZNANY_PARTNER')) return 'Nieznany partner: ' + m.split('NIEZNANY_PARTNER:')[1];
+  return 'Coś poszło nie tak: ' + m; };
+
+// =====================================================================
+//  WIDOKI
+// =====================================================================
+const $app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let INFO = null;
+
+async function home() {
+  try { INFO = await api.info(); } catch (e) { $app.innerHTML = `<div class="card"><div class="err">${esc(msg(e))}</div></div>`; return; }
+  const infoBox = `<div class="info">
+      <div><b>${esc(INFO.budget || '100 zł')}</b><small>limit prezentu</small></div>
+      <div><b>🎅</b><small>${esc(INFO.event || '')}</small></div></div>`;
+  if (!INFO.started || !INFO.people.length) {
+    $app.innerHTML = `<div class="card"><h2>Jeszcze chwilka…</h2>
+      <p class="center">Organizator nie rozpoczął jeszcze losowania. Zajrzyj tu później! ⛄</p>${infoBox}</div>`;
+    return;
+  }
+  $app.innerHTML = `
+    <div class="card"><h2>Kim jesteś?</h2>
+      <p class="hint">Wybierz swoje imię. ✓ oznacza, że ta osoba już sprawdziła wynik.</p>
+      <div class="names">${INFO.people.map(p =>
+        `<button class="name-btn ${p.claimed?'claimed':''}" data-n="${esc(p.name)}">${esc(p.name)}</button>`).join('')}</div>
+    </div>
+    <div class="card">${infoBox}</div>`;
+  $app.querySelectorAll('.name-btn').forEach(b => b.onclick = () => {
+    const p = INFO.people.find(x => x.name === b.dataset.n); pinView(p.name, p.claimed);
+  });
+}
+
+function pinBoxes(id) {
+  return `<div class="pin" id="${id}">${[0,1,2,3].map(()=>`<input inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off">`).join('')}</div>`;
+}
+function wirePin(id, onFull) {
+  const ins = [...document.querySelectorAll(`#${id} input`)];
+  ins.forEach((inp, i) => {
+    inp.oninput = () => { inp.value = inp.value.replace(/\D/g,'').slice(-1);
+      if (inp.value && i < 3) ins[i+1].focus();
+      if (ins.every(x => x.value)) onFull && onFull(); };
+    inp.onkeydown = e => { if (e.key === 'Backspace' && !inp.value && i > 0) ins[i-1].focus(); };
+    inp.onpaste = e => { const d = (e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,4);
+      if (d.length) { e.preventDefault(); d.split('').forEach((c,k)=>ins[k]&&(ins[k].value=c)); ins[Math.min(d.length,3)].focus();
+      if (d.length === 4) onFull && onFull(); } };
+  });
+  return { get: () => ins.map(x=>x.value).join(''), clear: () => { ins.forEach(x=>x.value=''); ins[0].focus(); }, focus: () => ins[0].focus() };
+}
+
+function pinView(name, claimed) {
+  $app.innerHTML = `<div class="card">
+    <div class="who">Cześć, <b>${esc(name)}</b>! 👋</div>
+    ${claimed
+      ? `<h2>Podaj swój PIN</h2><p class="hint">Ten sam, który ustawiłeś/aś przy pierwszym wejściu.</p>${pinBoxes('p1')}`
+      : `<h2>Ustaw swój PIN</h2><p class="hint">Wymyśl 4 cyfry. Dzięki nim nikt inny nie podejrzy Twojego wyniku. <b>Zapamiętaj je!</b></p>
+         ${pinBoxes('p1')}<p class="hint" style="margin-top:14px">Powtórz PIN:</p>${pinBoxes('p2')}`}
+    <div class="err" id="err"></div>
+    <button class="btn" id="go">${claimed ? 'Pokaż mój wynik 🎁' : 'Losuję! 🎲'}</button>
+    <button class="btn ghost" id="back">← To nie ja</button></div>`;
+  const p1 = wirePin('p1', () => claimed ? go() : document.querySelector('#p2 input').focus());
+  const p2 = claimed ? null : wirePin('p2');
+  p1.focus();
+  const $err = document.getElementById('err'), $go = document.getElementById('go');
+  document.getElementById('back').onclick = home;
+  async function go() {
+    const pin = p1.get();
+    if (pin.length !== 4) { $err.textContent = 'Wpisz 4 cyfry.'; return; }
+    if (!claimed && p2.get() !== pin) { $err.textContent = 'PIN-y się różnią – wpisz jeszcze raz.'; p2.clear(); return; }
+    $go.disabled = true; $err.textContent = '';
+    try {
+      const r = await api.reveal(name, pin);
+      if (r.ok) return revealView(name, r.recipient, r.first);
+      if (r.error === 'ZLY_PIN') $err.textContent = `Zły PIN. Pozostało prób: ${r.left}.`;
+      else $err.textContent = ERR[r.error] || r.error;
+      p1.clear();
+    } catch (e) { $err.textContent = msg(e); }
+    $go.disabled = false;
+  }
+  $go.onclick = go;
+}
+
+function revealView(name, recipient, first) {
+  $app.innerHTML = `<div class="card center">
+    <div class="who"><b>${esc(name)}</b>, kupujesz prezent dla…</div>
+    <div class="gift shake" id="gift">🎁</div>
+    <div class="roll" id="roll">&nbsp;</div>
+    <p class="hint" id="tap">Dotknij prezentu, żeby go otworzyć!</p>
+    <div id="after" class="hidden">
+      <div class="secret">🤫 <b>Ćśś!</b> To tajemnica, nikomu nie mów.<br>Limit: <b>${esc(INFO.budget)}</b> · ${esc(INFO.event)}</div>
+      <p class="hint" style="margin-top:12px">${first ? 'Zapamiętaj swój PIN. Z nim możesz tu wrócić i sprawdzić wynik jeszcze raz.' : ''}</p>
+      <button class="btn gold" id="done">Gotowe ✨</button>
+    </div></div>`;
+  const gift = document.getElementById('gift'), roll = document.getElementById('roll');
+  let opened = false;
+  gift.onclick = () => {
+    if (opened) return; opened = true;
+    document.getElementById('tap').classList.add('hidden');
+    const pool = INFO.people.map(p => p.name).filter(n => n !== name);
+    let t = 0, delay = 60;
+    (function spin() {
+      roll.textContent = pool[Math.floor(Math.random()*pool.length)];
+      t++; delay *= 1.1;
+      if (t < 18) return setTimeout(spin, delay);
+      gift.classList.remove('shake'); gift.textContent = '🎉';
+      roll.className = 'result'; roll.textContent = recipient;
+      confetti(); document.getElementById('after').classList.remove('hidden');
+    })();
+  };
+  document.getElementById('done').onclick = home;
+}
+
+function confetti() {
+  const cols = ['#b3122e','#f4c95d','#0f5132','#ffffff','#5bd1ff'];
+  for (let i = 0; i < 90; i++) {
+    const c = document.createElement('div'); c.className = 'confetti';
+    c.style.left = Math.random()*100 + 'vw'; c.style.background = cols[i % cols.length];
+    c.style.animationDuration = (2 + Math.random()*2.5) + 's'; c.style.animationDelay = (Math.random()*.6) + 's';
+    c.style.borderRadius = Math.random() > .5 ? '50%' : '2px';
+    document.body.appendChild(c); setTimeout(() => c.remove(), 5500);
+  }
+}
+
+// ---------------- ORGANIZATOR (adres strony + #admin) ----------------
+let ADMIN_PASS = '';
+function adminLogin() {
+  $app.innerHTML = `<div class="card"><h2>Panel organizatora</h2>
+    <label>Hasło organizatora</label><input type="password" class="field" id="pw" autocomplete="current-password">
+    <div class="err" id="err"></div><button class="btn" id="go">Zaloguj</button>
+    <button class="btn ghost" id="back">← Strona główna</button></div>`;
+  const pw = document.getElementById('pw'); pw.focus();
+  const go = async () => {
+    try { await api.status(pw.value); ADMIN_PASS = pw.value; adminPanel(); }
+    catch (e) { document.getElementById('err').textContent = msg(e); }
+  };
+  document.getElementById('go').onclick = go; pw.onkeydown = e => e.key === 'Enter' && go();
+  document.getElementById('back').onclick = () => { location.hash = ''; };
+}
+
+async function adminPanel() {
+  const [st, info] = await Promise.all([api.status(ADMIN_PASS), api.info()]);
+  // odtwórz listę do edycji (pary w jednej linii)
+  const seen = new Set(), lines = [];
+  st.forEach(p => { if (seen.has(p.name)) return; seen.add(p.name);
+    if (p.partner) { seen.add(p.partner); lines.push(`${p.name} & ${p.partner}`); } else lines.push(p.name); });
+  const claimedCount = st.filter(p => p.claimed).length;
+  $app.innerHTML = `
+    ${st.length ? `<div class="card"><h2>Status (${claimedCount}/${st.length})</h2>
+      <p class="hint">Widać tylko, kto już sprawdził wynik. Samych wyników nie widać.</p>
+      <table>${st.map(p => `<tr><td><b>${esc(p.name)}</b></td>
+        <td>${p.locked ? '<span class="badge lock">zablokowany</span>' : p.claimed ? '<span class="badge ok">sprawdził ✓</span>' : '<span class="badge no">czeka</span>'}</td>
+        <td style="text-align:right">${p.claimed || p.locked ? `<button class="btn small" data-reset="${esc(p.name)}">reset PIN</button>` : ''}</td></tr>`).join('')}</table>
+      <p class="hint" style="margin-top:10px">„Reset PIN” pozwala osobie ustawić nowy PIN. Jej wylosowana osoba się nie zmienia.</p>
+    </div>` : ''}
+    <div class="card"><h2>${st.length ? 'Losuj od nowa' : 'Nowe losowanie'}</h2>
+      <label>Uczestnicy: jedna osoba w linii. Małżeństwa w jednej linii z „&amp;”</label>
+      <textarea id="ppl" placeholder="Anna &amp; Piotr&#10;Kasia &amp; Tomek&#10;Basia&#10;Karol">${esc(lines.join('\n'))}</textarea>
+      <p class="hint" id="cnt"></p>
+      <label>Limit kwoty</label><input class="field" id="budget" value="${esc(info.budget || '100 zł')}">
+      <label>Kiedy i gdzie</label><input class="field" id="event" value="${esc(info.event || 'Prezenty zostawiamy pod choinką w Wigilię (24 grudnia)')}">
+      <div class="err" id="err"></div>
+      <button class="btn" id="start">🎲 ${st.length ? 'Losuj od nowa' : 'Rozpocznij losowanie'}</button>
+      <button class="btn ghost" id="back">← Strona główna</button>
+    </div>`;
+  const ta = document.getElementById('ppl'), cnt = document.getElementById('cnt');
+  const parse = () => ta.value.split('\n').map(l => l.trim()).filter(Boolean).flatMap(l => {
+    const parts = l.split(/\s*[&+]\s*/).filter(Boolean);
+    return parts.length === 2 ? [{ name: parts[0], partner: parts[1] }, { name: parts[1] }] : [{ name: parts[0] }];
+  });
+  const upd = () => { const p = parse(); cnt.textContent = `Osób: ${p.length} · małżeństw: ${p.filter(x=>x.partner).length}`; };
+  ta.oninput = upd; upd();
+  document.getElementById('back').onclick = () => { location.hash = ''; };
+  $app.querySelectorAll('[data-reset]').forEach(b => b.onclick = async () => {
+    if (!confirm(`Zresetować PIN dla: ${b.dataset.reset}?`)) return;
+    await api.reset(ADMIN_PASS, b.dataset.reset); adminPanel();
+  });
+  document.getElementById('start').onclick = async () => {
+    const people = parse(), $err = document.getElementById('err');
+    if (claimedCount && !confirm(`${claimedCount} os. już zna swój wynik. Losowanie od nowa skasuje wszystko i każdy będzie musiał sprawdzić jeszcze raz. Na pewno?`)) return;
+    try { await api.start(ADMIN_PASS, people, document.getElementById('budget').value.trim(), document.getElementById('event').value.trim());
+          $err.textContent = ''; alert('Losowanie gotowe! 🎄 Wyślij wszystkim link do strony.'); adminPanel(); }
+    catch (e) { $err.textContent = msg(e); }
+  };
+}
+
+// ---------------- ROUTING ----------------
+function route() { location.hash === '#admin' ? (ADMIN_PASS ? adminPanel() : adminLogin()) : home(); }
+window.addEventListener('hashchange', route);
+if (DEMO) document.getElementById('demoBanner').classList.remove('hidden');
+document.getElementById('foot').innerHTML = `Wesołych Świąt! 🎅 · <a href="#admin">organizator</a>`;
+route();
+
+// ---------------- ŚNIEG ----------------
+(() => {
+  const c = document.getElementById('snow'), x = c.getContext('2d'); let W, H, flakes;
+  const init = () => { W = c.width = innerWidth; H = c.height = innerHeight;
+    flakes = Array.from({ length: Math.min(120, Math.floor(W/6)) }, () => ({ x: Math.random()*W, y: Math.random()*H, r: 1 + Math.random()*3, s: .4 + Math.random()*1.2, d: Math.random()*6 })); };
+  const tick = () => { x.clearRect(0,0,W,H); x.fillStyle = 'rgba(255,255,255,.85)';
+    for (const f of flakes) { f.y += f.s; f.d += .01; f.x += Math.sin(f.d)*.5;
+      if (f.y > H) { f.y = -5; f.x = Math.random()*W; }
+      x.beginPath(); x.arc(f.x, f.y, f.r, 0, Math.PI*2); x.fill(); }
+    requestAnimationFrame(tick); };
+  addEventListener('resize', init); init(); tick();
+})();
+</script>
+</body>
+</html>
